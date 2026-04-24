@@ -14,6 +14,7 @@
 				arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;"
 				id="scene"
 				embedded
+				gesture-detector
 		>
 		<a-assets>
 				<img id="png-asset" src="assets/asset.png">
@@ -29,12 +30,12 @@
 			cursor="fuse: false; rayOrigin: mouse;"
 		>
 		<a-image
-			id="ar-image"
-			src="#png-asset"
-			class="clickable"
-			rotation="-90 0 0"
-			keep-image-aspect
-			ar-touch-control="minScale: 0.3; maxScale: 5; rotateSpeed: 0.5"
+				id="ar-image"
+				src="#png-asset"
+				class="clickable"
+				rotation="-90 0 0"
+				keep-image-aspect
+				gesture-handler="minScale: 0.3; maxScale: 5; rotationFactor: 5"
 		></a-image>
 		</a-marker>
 
@@ -42,173 +43,52 @@
 			</a-scene>
 
 		<script>
-				AFRAME.registerComponent('keep-image-aspect', {
-						init: function () {
-								const el = this.el;
-								const src = el.getAttribute('src');
-
-								let img;
-
-								if (src && src.startsWith('#')) {
-										img = document.querySelector(src);
-								} else {
-										img = new Image();
-										img.src = src;
-								}
-
-								const applyAspect = () => {
-										const width = img.naturalWidth;
-										const height = img.naturalHeight;
-
-										if (!width || !height) return;
-
-										const aspect = width / height;
-
-										// 高さを1にして、幅を画像の比率に合わせる
-										el.setAttribute('height', 1);
-										el.setAttribute('width', aspect);
-
-										// 初期サイズ
-										el.object3D.scale.set(1, 1, 1);
-								};
-
-								if (img.complete) {
-										applyAspect();
-								} else {
-										img.addEventListener('load', applyAspect);
-								}
-						}
-				});
-
-
-				AFRAME.registerComponent('ar-touch-control', {
+				AFRAME.registerComponent('gesture-handler', {
 						schema: {
-								minScale: { type: 'number', default: 0.3 },
-								maxScale: { type: 'number', default: 5 },
-								rotateSpeed: { type: 'number', default: 0.5 }
+								enabled: { default: true },
+								rotationFactor: { default: 5 },
+								minScale: { default: 0.3 },
+								maxScale: { default: 5 }
 						},
 
 						init: function () {
-								this.isOneFinger = false;
-								this.isTwoFinger = false;
+								this.handleScale = this.handleScale.bind(this);
+								this.handleRotation = this.handleRotation.bind(this);
 
-								this.lastX = null;
-
-								this.startDistance = null;
-								this.startScale = null;
-
-								const el = this.el;
-
-								const getDistance = (touches) => {
-										const dx = touches[0].clientX - touches[1].clientX;
-										const dy = touches[0].clientY - touches[1].clientY;
-										return Math.sqrt(dx * dx + dy * dy);
-								};
-
-								const onTouchStart = (event) => {
-										if (!el.object3D.visible) return;
-
-										if (event.touches.length === 1) {
-												this.isOneFinger = true;
-												this.isTwoFinger = false;
-												this.lastX = event.touches[0].clientX;
-										}
-
-										if (event.touches.length === 2) {
-												event.preventDefault();
-
-												this.isOneFinger = false;
-												this.isTwoFinger = true;
-
-												this.startDistance = getDistance(event.touches);
-												this.startScale = el.object3D.scale.x;
-										}
-								};
-
-								const onTouchMove = (event) => {
-										if (!el.object3D.visible) return;
-
-										// rotate
-										if (event.touches.length === 1 && this.isOneFinger) {
-												event.preventDefault();
-
-												const currentX = event.touches[0].clientX;
-												const deltaX = currentX - this.lastX;
-
-												el.object3D.rotation.z -= THREE.MathUtils.degToRad(
-														deltaX * this.data.rotateSpeed
-												);
-
-												this.lastX = currentX;
-										}
-
-										// zoom
-										if (
-												event.touches.length === 2 &&
-												this.isTwoFinger &&
-												this.startDistance &&
-												this.startScale
-										) {
-												event.preventDefault();
-
-												const currentDistance = getDistance(event.touches);
-												const scaleRatio = currentDistance / this.startDistance;
-
-												let newScale = this.startScale * scaleRatio;
-
-												newScale = Math.max(
-														this.data.minScale,
-														Math.min(this.data.maxScale, newScale)
-												);
-
-												el.object3D.scale.set(newScale, newScale, newScale);
-										}
-								};
-
-								const onTouchEnd = (event) => {
-										if (event.touches.length === 0) {
-												this.isOneFinger = false;
-												this.isTwoFinger = false;
-												this.lastX = null;
-												this.startDistance = null;
-												this.startScale = null;
-										}
-
-										if (event.touches.length === 1) {
-												this.isOneFinger = true;
-												this.isTwoFinger = false;
-												this.lastX = event.touches[0].clientX;
-												this.startDistance = null;
-												this.startScale = null;
-										}
-								};
-
-								document.addEventListener('touchstart', onTouchStart, {
-										passive: false,
-										capture: true
-								});
-
-								document.addEventListener('touchmove', onTouchMove, {
-										passive: false,
-										capture: true
-								});
-
-								document.addEventListener('touchend', onTouchEnd, {
-										passive: false,
-										capture: true
-								});
-
-								this.removeListeners = () => {
-										document.removeEventListener('touchstart', onTouchStart, true);
-										document.removeEventListener('touchmove', onTouchMove, true);
-										document.removeEventListener('touchend', onTouchEnd, true);
-								};
+								this.el.sceneEl.addEventListener('twofingermove', this.handleScale);
+								this.el.sceneEl.addEventListener('onefingermove', this.handleRotation);
 						},
 
 						remove: function () {
-								if (this.removeListeners) {
-										this.removeListeners();
-								}
+								this.el.sceneEl.removeEventListener('twofingermove', this.handleScale);
+								this.el.sceneEl.removeEventListener('onefingermove', this.handleRotation);
+						},
+
+						handleRotation: function (event) {
+								if (!this.data.enabled) return;
+
+								const deltaX = event.detail.positionChange.x;
+								const deltaY = event.detail.positionChange.y;
+
+								this.el.object3D.rotation.y += deltaX * this.data.rotationFactor;
+
+								this.el.object3D.rotation.x += deltaY * this.data.rotationFactor;
+						},
+
+						handleScale: function (event) {
+								if (!this.data.enabled) return;
+								if (!event.detail.spreadChange) return;
+
+								const currentScale = this.el.object3D.scale.x;
+
+								let newScale = currentScale + event.detail.spreadChange / 200;
+
+								newScale = Math.max(
+										this.data.minScale,
+										Math.min(this.data.maxScale, newScale)
+								);
+
+								this.el.object3D.scale.set(newScale, newScale, newScale);
 						}
 				});
 		</script>
