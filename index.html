@@ -20,139 +20,197 @@
 		</a-assets>
 
 		<a-marker
-				id="animated-marker"
-				type="pattern"
-				preset="custom"
-				url="assets/marker.patt"
-				raycaster="objects: .clickable"
-				emitevents="true"
-				cursor="fuse: false; rayOrigin: mouse;"
+			id="animated-marker"
+			type="pattern"
+			preset="custom"
+			url="assets/marker.patt"
+			raycaster="objects: .clickable"
+			emitevents="true"
+			cursor="fuse: false; rayOrigin: mouse;"
 		>
-			<a-image
-					id="ar-image"
-					src="#png-asset"
-					class="clickable"
-					rotation="-90 0 0"
-					keep-image-aspect
-					pinch-zoom="min: 0.3; max: 5"
-			></a-image>
+		<a-image
+			id="ar-image"
+			src="#png-asset"
+			class="clickable"
+			rotation="-90 0 0"
+			keep-image-aspect
+			ar-touch-control="minScale: 0.3; maxScale: 5; rotateSpeed: 0.5"
+		></a-image>
 		</a-marker>
 
 		<a-entity camera></a-entity>
 			</a-scene>
 
-<script>
-    AFRAME.registerComponent('keep-image-aspect', {
-        init: function () {
-            const el = this.el;
-            const src = el.getAttribute('src');
+		<script>
+				AFRAME.registerComponent('keep-image-aspect', {
+						init: function () {
+								const el = this.el;
+								const src = el.getAttribute('src');
 
-            let img;
+								let img;
 
-            if (src && src.startsWith('#')) {
-                img = document.querySelector(src);
-            } else {
-                img = new Image();
-                img.src = src;
-            }
+								if (src && src.startsWith('#')) {
+										img = document.querySelector(src);
+								} else {
+										img = new Image();
+										img.src = src;
+								}
 
-            const applyAspect = () => {
-                const width = img.naturalWidth;
-                const height = img.naturalHeight;
+								const applyAspect = () => {
+										const width = img.naturalWidth;
+										const height = img.naturalHeight;
 
-                if (!width || !height) return;
+										if (!width || !height) return;
 
-                const aspect = width / height;
+										const aspect = width / height;
 
-                el.setAttribute('height', 1);
-                el.setAttribute('width', aspect);
-                el.setAttribute('scale', '1 1 1');
-            };
+										// 高さを1にして、幅を画像の比率に合わせる
+										el.setAttribute('height', 1);
+										el.setAttribute('width', aspect);
 
-            if (img.complete) {
-                applyAspect();
-            } else {
-                img.addEventListener('load', applyAspect);
-            }
-        }
-    });
+										// 初期サイズ
+										el.object3D.scale.set(1, 1, 1);
+								};
 
-    AFRAME.registerComponent('touch-transform', {
-        schema: {
-            min: { type: 'number', default: 0.3 },
-            max: { type: 'number', default: 5 },
-            rotationSpeed: { type: 'number', default: 0.5 }
-        },
+								if (img.complete) {
+										applyAspect();
+								} else {
+										img.addEventListener('load', applyAspect);
+								}
+						}
+				});
 
-        init: function () {
-            this.initialDistance = null;
-            this.initialScale = null;
-            this.lastTouchX = null;
-            this.isRotating = false;
-            this.isPinching = false;
 
-            const sceneEl = this.el.sceneEl;
+				AFRAME.registerComponent('ar-touch-control', {
+						schema: {
+								minScale: { type: 'number', default: 0.3 },
+								maxScale: { type: 'number', default: 5 },
+								rotateSpeed: { type: 'number', default: 0.5 }
+						},
 
-            const getDistance = (touches) => {
-                const dx = touches[0].clientX - touches[1].clientX;
-                const dy = touches[0].clientY - touches[1].clientY;
-                return Math.sqrt(dx * dx + dy * dy);
-            };
+						init: function () {
+								this.isOneFinger = false;
+								this.isTwoFinger = false;
 
-            sceneEl.addEventListener('touchstart', (event) => {
-                if (event.touches.length === 1) {
-                    this.isRotating = true;
-                    this.isPinching = false;
-                    this.lastTouchX = event.touches[0].clientX;
-                }
+								this.lastX = null;
 
-                if (event.touches.length === 2) {
-                    this.isRotating = false;
-                    this.isPinching = true;
-                    this.initialDistance = getDistance(event.touches);
-                    this.initialScale = this.el.object3D.scale.clone();
-                }
-            }, { passive: false });
+								this.startDistance = null;
+								this.startScale = null;
 
-            sceneEl.addEventListener('touchmove', (event) => {
-                event.preventDefault();
+								const el = this.el;
 
-                // rotate
-                if (event.touches.length === 1 && this.isRotating) {
-                    const currentX = event.touches[0].clientX;
-                    const deltaX = currentX - this.lastTouchX;
+								const getDistance = (touches) => {
+										const dx = touches[0].clientX - touches[1].clientX;
+										const dy = touches[0].clientY - touches[1].clientY;
+										return Math.sqrt(dx * dx + dy * dy);
+								};
 
-                    this.el.object3D.rotation.z -= THREE.MathUtils.degToRad(deltaX * this.data.rotationSpeed);
+								const onTouchStart = (event) => {
+										if (!el.object3D.visible) return;
 
-                    this.lastTouchX = currentX;
-                }
+										if (event.touches.length === 1) {
+												this.isOneFinger = true;
+												this.isTwoFinger = false;
+												this.lastX = event.touches[0].clientX;
+										}
 
-                // zoom
-                if (
-                    event.touches.length === 2 &&
-                    this.isPinching &&
-                    this.initialDistance &&
-                    this.initialScale
-                ) {
-                    const currentDistance = getDistance(event.touches);
-                    const ratio = currentDistance / this.initialDistance;
+										if (event.touches.length === 2) {
+												event.preventDefault();
 
-                    let newScale = this.initialScale.x * ratio;
-                    newScale = Math.max(this.data.min, Math.min(this.data.max, newScale));
+												this.isOneFinger = false;
+												this.isTwoFinger = true;
 
-                    this.el.object3D.scale.set(newScale, newScale, newScale);
-                }
-            }, { passive: false });
+												this.startDistance = getDistance(event.touches);
+												this.startScale = el.object3D.scale.x;
+										}
+								};
 
-            sceneEl.addEventListener('touchend', () => {
-                this.initialDistance = null;
-                this.initialScale = null;
-                this.lastTouchX = null;
-                this.isRotating = false;
-                this.isPinching = false;
-            });
-        }
-    });
-</script>
+								const onTouchMove = (event) => {
+										if (!el.object3D.visible) return;
+
+										// rotate
+										if (event.touches.length === 1 && this.isOneFinger) {
+												event.preventDefault();
+
+												const currentX = event.touches[0].clientX;
+												const deltaX = currentX - this.lastX;
+
+												el.object3D.rotation.z -= THREE.MathUtils.degToRad(
+														deltaX * this.data.rotateSpeed
+												);
+
+												this.lastX = currentX;
+										}
+
+										// zoom
+										if (
+												event.touches.length === 2 &&
+												this.isTwoFinger &&
+												this.startDistance &&
+												this.startScale
+										) {
+												event.preventDefault();
+
+												const currentDistance = getDistance(event.touches);
+												const scaleRatio = currentDistance / this.startDistance;
+
+												let newScale = this.startScale * scaleRatio;
+
+												newScale = Math.max(
+														this.data.minScale,
+														Math.min(this.data.maxScale, newScale)
+												);
+
+												el.object3D.scale.set(newScale, newScale, newScale);
+										}
+								};
+
+								const onTouchEnd = (event) => {
+										if (event.touches.length === 0) {
+												this.isOneFinger = false;
+												this.isTwoFinger = false;
+												this.lastX = null;
+												this.startDistance = null;
+												this.startScale = null;
+										}
+
+										if (event.touches.length === 1) {
+												this.isOneFinger = true;
+												this.isTwoFinger = false;
+												this.lastX = event.touches[0].clientX;
+												this.startDistance = null;
+												this.startScale = null;
+										}
+								};
+
+								document.addEventListener('touchstart', onTouchStart, {
+										passive: false,
+										capture: true
+								});
+
+								document.addEventListener('touchmove', onTouchMove, {
+										passive: false,
+										capture: true
+								});
+
+								document.addEventListener('touchend', onTouchEnd, {
+										passive: false,
+										capture: true
+								});
+
+								this.removeListeners = () => {
+										document.removeEventListener('touchstart', onTouchStart, true);
+										document.removeEventListener('touchmove', onTouchMove, true);
+										document.removeEventListener('touchend', onTouchEnd, true);
+								};
+						},
+
+						remove: function () {
+								if (this.removeListeners) {
+										this.removeListeners();
+								}
+						}
+				});
+		</script>
 	</body>
 </html>
