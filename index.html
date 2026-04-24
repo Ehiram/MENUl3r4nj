@@ -29,14 +29,14 @@
 			emitevents="true"
 			cursor="fuse: false; rayOrigin: mouse;"
 		>
-		<a-image
+		<a-plane
 				id="ar-image"
-				src="#png-asset"
 				class="clickable"
+				material="src: #png-asset; transparent: true"
 				rotation="-90 0 0"
 				keep-image-aspect="baseHeight: 1.5"
 				gesture-handler="minScale: 0.3; maxScale: 5; rotationFactor: 5"
-		></a-image>
+		></a-plane>
 		</a-marker>
 
 		<a-entity camera></a-entity>
@@ -92,53 +92,47 @@
 						}
 				});
 
-    AFRAME.registerComponent('keep-image-aspect', {
-        schema: {
-            baseHeight: { type: 'number', default: 1 }
-        },
+				AFRAME.registerComponent('keep-image-aspect', {
+				schema: {
+						baseHeight: { type: 'number', default: 1 }
+				},
 
-        init: function () {
-            const el = this.el;
-            const src = el.getAttribute('src');
+				init: function () {
+						const el = this.el;
+						const img = document.querySelector('#png-asset');
 
-            let img = null;
+						const applyAspect = () => {
+								const naturalWidth = img.naturalWidth;
+								const naturalHeight = img.naturalHeight;
 
-            if (src && src.startsWith('#')) {
-                img = document.querySelector(src);
-            }
+								const aspect = naturalWidth / naturalHeight;
+								const baseHeight = this.data.baseHeight;
+								const baseWidth = baseHeight * aspect;
 
-            if (!img) {
-                console.warn('画像が見つかりません:', src);
-                return;
-            }
+								console.log('画像サイズ:', naturalWidth, naturalHeight);
+								console.log('表示サイズ:', baseWidth, baseHeight);
 
-            const applyAspect = () => {
-                const naturalWidth = img.naturalWidth;
-                const naturalHeight = img.naturalHeight;
+								el.setAttribute('geometry', {
+										primitive: 'plane',
+										width: baseWidth,
+										height: baseHeight
+								});
 
-                if (!naturalWidth || !naturalHeight) {
-                    console.warn('画像サイズが取得できません');
-                    return;
-                }
+								el.setAttribute('material', {
+										src: '#png-asset',
+										transparent: true
+								});
 
-                const aspect = naturalWidth / naturalHeight;
-                const baseHeight = this.data.baseHeight;
-                const baseWidth = baseHeight * aspect;
+								el.object3D.scale.set(1, 1, 1);
+						};
 
-                el.setAttribute('width', baseWidth);
-                el.setAttribute('height', baseHeight);
-
-                // scaleは縦横同じ倍率にする。ここで比率をいじらない。
-                el.object3D.scale.set(1, 1, 1);
-            };
-
-            if (img.complete && img.naturalWidth) {
-                applyAspect();
-            } else {
-                img.addEventListener('load', applyAspect);
-            }
-        }
-    });
+						if (img.complete && img.naturalWidth) {
+								applyAspect();
+						} else {
+								img.addEventListener('load', applyAspect);
+						}
+				}
+		});
 		</script>
 	</body>
 </html>
