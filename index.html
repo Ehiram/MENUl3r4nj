@@ -91,6 +91,54 @@
 								this.el.object3D.scale.set(newScale, newScale, newScale);
 						}
 				});
+
+    AFRAME.registerComponent('keep-image-aspect', {
+        schema: {
+            baseHeight: { type: 'number', default: 1 }
+        },
+
+        init: function () {
+            const el = this.el;
+            const src = el.getAttribute('src');
+
+            let img = null;
+
+            if (src && src.startsWith('#')) {
+                img = document.querySelector(src);
+            }
+
+            if (!img) {
+                console.warn('画像が見つかりません:', src);
+                return;
+            }
+
+            const applyAspect = () => {
+                const naturalWidth = img.naturalWidth;
+                const naturalHeight = img.naturalHeight;
+
+                if (!naturalWidth || !naturalHeight) {
+                    console.warn('画像サイズが取得できません');
+                    return;
+                }
+
+                const aspect = naturalWidth / naturalHeight;
+                const baseHeight = this.data.baseHeight;
+                const baseWidth = baseHeight * aspect;
+
+                el.setAttribute('width', baseWidth);
+                el.setAttribute('height', baseHeight);
+
+                // scaleは縦横同じ倍率にする。ここで比率をいじらない。
+                el.object3D.scale.set(1, 1, 1);
+            };
+
+            if (img.complete && img.naturalWidth) {
+                applyAspect();
+            } else {
+                img.addEventListener('load', applyAspect);
+            }
+        }
+    });
 		</script>
 	</body>
 </html>
