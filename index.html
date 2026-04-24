@@ -41,89 +41,118 @@
 		<a-entity camera></a-entity>
 			</a-scene>
 
-		<script>
-				AFRAME.registerComponent('keep-image-aspect', {
-						init: function () {
-								const el = this.el;
-								const src = el.getAttribute('src');
+<script>
+    AFRAME.registerComponent('keep-image-aspect', {
+        init: function () {
+            const el = this.el;
+            const src = el.getAttribute('src');
 
-								let img;
+            let img;
 
-								if (src && src.startsWith('#')) {
-										img = document.querySelector(src);
-								} else {
-										img = new Image();
-										img.src = src;
-								}
+            if (src && src.startsWith('#')) {
+                img = document.querySelector(src);
+            } else {
+                img = new Image();
+                img.src = src;
+            }
 
-								const applyAspect = () => {
-										const width = img.naturalWidth;
-										const height = img.naturalHeight;
+            const applyAspect = () => {
+                const width = img.naturalWidth;
+                const height = img.naturalHeight;
 
-										if (!width || !height) return;
+                if (!width || !height) return;
 
-										const aspect = width / height;
+                const aspect = width / height;
 
-										el.setAttribute('height', 1);
-										el.setAttribute('width', aspect);
+                el.setAttribute('height', 1);
+                el.setAttribute('width', aspect);
+                el.setAttribute('scale', '1 1 1');
+            };
 
-										el.setAttribute('scale', '1 1 1');
-								};
+            if (img.complete) {
+                applyAspect();
+            } else {
+                img.addEventListener('load', applyAspect);
+            }
+        }
+    });
 
-								if (img.complete) {
-										applyAspect();
-								} else {
-										img.addEventListener('load', applyAspect);
-								}
-						}
-				});
+    AFRAME.registerComponent('touch-transform', {
+        schema: {
+            min: { type: 'number', default: 0.3 },
+            max: { type: 'number', default: 5 },
+            rotationSpeed: { type: 'number', default: 0.5 }
+        },
 
-				AFRAME.registerComponent('pinch-zoom', {
-						schema: {
-								min: { type: 'number', default: 0.3 },
-								max: { type: 'number', default: 5 }
-						},
+        init: function () {
+            this.initialDistance = null;
+            this.initialScale = null;
+            this.lastTouchX = null;
+            this.isRotating = false;
+            this.isPinching = false;
 
-						init: function () {
-								this.initialDistance = null;
-								this.initialScale = null;
+            const sceneEl = this.el.sceneEl;
 
-								const sceneEl = this.el.sceneEl;
+            const getDistance = (touches) => {
+                const dx = touches[0].clientX - touches[1].clientX;
+                const dy = touches[0].clientY - touches[1].clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+            };
 
-								const getDistance = (touches) => {
-										const dx = touches[0].clientX - touches[1].clientX;
-										const dy = touches[0].clientY - touches[1].clientY;
-										return Math.sqrt(dx * dx + dy * dy);
-								};
+            sceneEl.addEventListener('touchstart', (event) => {
+                if (event.touches.length === 1) {
+                    this.isRotating = true;
+                    this.isPinching = false;
+                    this.lastTouchX = event.touches[0].clientX;
+                }
 
-								sceneEl.addEventListener('touchstart', (event) => {
-										if (event.touches.length !== 2) return;
+                if (event.touches.length === 2) {
+                    this.isRotating = false;
+                    this.isPinching = true;
+                    this.initialDistance = getDistance(event.touches);
+                    this.initialScale = this.el.object3D.scale.clone();
+                }
+            }, { passive: false });
 
-										this.initialDistance = getDistance(event.touches);
-										this.initialScale = this.el.object3D.scale.clone();
-								}, { passive: false });
+            sceneEl.addEventListener('touchmove', (event) => {
+                event.preventDefault();
 
-								sceneEl.addEventListener('touchmove', (event) => {
-										if (event.touches.length !== 2 || !this.initialDistance || !this.initialScale) return;
+                // rotate
+                if (event.touches.length === 1 && this.isRotating) {
+                    const currentX = event.touches[0].clientX;
+                    const deltaX = currentX - this.lastTouchX;
 
-										event.preventDefault();
+                    this.el.object3D.rotation.z -= THREE.MathUtils.degToRad(deltaX * this.data.rotationSpeed);
 
-										const currentDistance = getDistance(event.touches);
-										const ratio = currentDistance / this.initialDistance;
+                    this.lastTouchX = currentX;
+                }
 
-										let newScale = this.initialScale.x * ratio;
+                // zoom
+                if (
+                    event.touches.length === 2 &&
+                    this.isPinching &&
+                    this.initialDistance &&
+                    this.initialScale
+                ) {
+                    const currentDistance = getDistance(event.touches);
+                    const ratio = currentDistance / this.initialDistance;
 
-										newScale = Math.max(this.data.min, Math.min(this.data.max, newScale));
+                    let newScale = this.initialScale.x * ratio;
+                    newScale = Math.max(this.data.min, Math.min(this.data.max, newScale));
 
-										this.el.object3D.scale.set(newScale, newScale, newScale);
-								}, { passive: false });
+                    this.el.object3D.scale.set(newScale, newScale, newScale);
+                }
+            }, { passive: false });
 
-								sceneEl.addEventListener('touchend', () => {
-										this.initialDistance = null;
-										this.initialScale = null;
-								});
-						}
-				});
-		</script>
+            sceneEl.addEventListener('touchend', () => {
+                this.initialDistance = null;
+                this.initialScale = null;
+                this.lastTouchX = null;
+                this.isRotating = false;
+                this.isPinching = false;
+            });
+        }
+    });
+</script>
 	</body>
 </html>
